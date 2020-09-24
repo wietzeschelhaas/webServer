@@ -98,6 +98,8 @@ class WebServer:
             code = self.responseLine(200)
 
             ct = mimetypes.guess_type(filePath)[0]
+            if ct == None:
+                ct = 'text/hmtl'
             contentType = self.contentType(ct)
 
             print(contentType)
