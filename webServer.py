@@ -3,8 +3,11 @@ import sys
 import os
 import HTTPRequest
 import mimetypes
+from threading import Thread
+import threading
 
-class WebServer:
+
+class ClientThread(Thread):
 
     #more status codes can be implemented later, not sure if needed tho
     statusCodes = {
@@ -13,9 +16,15 @@ class WebServer:
         501: 'Not Implemented',
     }
 
-    def __init__(self,host="127.0.0.1",port=8887):
-        self.host = host
+    def __init__(self,ip,port,connection):
+        #have to call super class
+        Thread.__init__(self)
+        self.ip = ip
         self.port = port
+        self.conn = connection
+        
+    
+    
 
     def contentType(self, mimeType):
         return ('Content-Type: ' + mimeType + '\r\n').encode() 
@@ -35,26 +44,9 @@ class WebServer:
     def genRespons(self,code = b"", contentType = b"", body = b"",other= b""):
         return code + contentType + other + self.emptyLine() + body
 
-    #documentation for http:
-    #https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages
-    def start(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind((self.host,self.port))
+  
 
-        #The argument here is the number of unaccepted connections that the system will allow before refusing new connections
-        sock.listen(1)
 
-        #receive in chunks of 1024 bytes until an empty string is received
-        while 1:
-            conn,addr = sock.accept()
-            print("HTTP request by : ", addr)
-
-            data = conn.recv(1024)
-            #sometimes empty bytes are recevied, this keeps it from crashing
-            if not data == b'':
-                response = self.handleRequest(data)
-                conn.sendall(response)
-            conn.close()
 
 
     def handleRequest(self,data):
@@ -81,7 +73,7 @@ class WebServer:
 
     def getHandle(self,request):
 
-        #print("GET  ", request.uri)
+     
 
 
         body = None
@@ -102,7 +94,7 @@ class WebServer:
                 ct = 'text/hmtl'
             contentType = self.contentType(ct)
 
-            print(contentType)
+         
 
             with open(filePath,'rb') as f:
                 body = f.read()
@@ -131,10 +123,36 @@ class WebServer:
         response = self.genRespons(code=code,body=body)
         return response
 
+    
+    def run(self):
+        #this is a blocking call, thats why this is run on a different thread.
+        data = self.conn.recv(1024)
+        #sometimes empty bytes are recevied, this keeps it from crashing
+        if not data == b'':
+            response = self.handleRequest(data)
+            self.conn.sendall(response)
+        self.conn.close()
+
+#documentation for http:
+#https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages   
+
+host = "192.168.2.168"
+port = 8888
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.bind((host,port))
+
+threads = []
 
 
+#receive in chunks of 1024 bytes until an empty string is received
+while 1:
+    sock.listen(5)
+    conn,addr = sock.accept()
+    print("HTTP request by : ", addr)
+    newThread = ClientThread(addr[0],addr[1],conn)
+    newThread.start()
+    threads.append(newThread)
 
-if __name__ == "__main__":
-    webServer = WebServer()
-    webServer.start()
 
+for t in threads:
+    t.join()
